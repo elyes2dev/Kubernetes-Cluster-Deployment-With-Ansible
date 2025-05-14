@@ -1,0 +1,64 @@
+- name: Install Helm and Deploy Prometheus
+  hosts: master
+  become: false
+  tasks:
+
+    - name: Download Helm installation script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        dest: /home/baraa/get_helm.sh
+        mode: '0700'
+
+    - name: Install Helm
+      ansible.builtin.command:
+        cmd: /home/baraa/get_helm.sh
+      register: helm_install_output
+      changed_when: "'Helm v3' in helm_install_output.stdout"
+
+    - name: Add Prometheus Helm repository
+      ansible.builtin.command:
+        cmd: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      changed_when: false
+
+    - name: Install Prometheus using Helm
+      ansible.builtin.command:
+        cmd: >
+          helm install prometheus prometheus-community/kube-prometheus-stack
+          --version 45.7.1 --namespace monitoring --create-namespace
+      changed_when: false
+
+    - name: Wait for all nodes to be ready
+      ansible.builtin.shell: |
+        kubectl get nodes --no-headers | awk '$2 != "Ready" {print $1}'
+      register: node_status
+      changed_when: false
+
+    - name: Print non-ready nodes
+      ansible.builtin.debug:
+        msg: "Non-ready nodes: {{ node_status.stdout_lines }}"
+      when: node_status.stdout | length > 0
+
+    - name: Wait for all monitoring pods to be running
+      ansible.builtin.shell: |
+        kubectl get pods -n monitoring --no-headers | awk '$3 != "Running" {print $1}'
+      register: pod_status
+      changed_when: false
+
+    - name: Print non-running pods
+      ansible.builtin.debug:
+        msg: "Non-running pods: {{ pod_status.stdout_lines }}"
+      when: pod_status.stdout | length > 0
+
+    - name: Set up port forwarding for Grafana
+      ansible.builtin.shell: |
+        nohup kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80 > /dev/null 2>&1 &
+      args:
+        executable: /bin/bash
+      async: 0
+      poll: 0
+      changed_when: false
+
+    - name: Print Grafana URL
+      ansible.builtin.debug:
+        msg: "Grafana is accessible at http://localhost:3000 on the master node."
+
