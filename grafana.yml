@@ -6,7 +6,7 @@
     - name: Download Helm installation script
       ansible.builtin.get_url:
         url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-        dest: /home/baraa/get_helm.sh
+        dest: /home/controller/get_helm.sh
         mode: '0700'
 
     - name: Install Helm
